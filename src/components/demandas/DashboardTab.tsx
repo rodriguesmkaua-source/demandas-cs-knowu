@@ -166,20 +166,35 @@ export function DashboardTab({ state }: { state: State }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="glass rounded-xl p-4">
             <div className="text-sm font-semibold mb-3">Por operadora</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={byOperadora}><XAxis dataKey="name" tick={{ fill: "#888", fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={70} /><YAxis tick={{ fill: "#888", fontSize: 10 }} /><Tooltip contentStyle={{ background: "#111118", border: "1px solid #333" }} /><Bar dataKey="total" fill="#7c6af7" radius={[6, 6, 0, 0]} /></BarChart>
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={byOperadora} margin={{ top: 10, right: 12, left: 0, bottom: 8 }}>
+                <XAxis dataKey="name" tick={{ fill: "#aaa", fontSize: 11 }} interval={0} angle={-35} textAnchor="end" height={90} />
+                <YAxis tick={{ fill: "#aaa", fontSize: 11 }} allowDecimals={false} width={30} />
+                <Tooltip contentStyle={{ background: "#111118", border: "1px solid #333", borderRadius: 8 }} cursor={{ fill: "rgba(124,106,247,0.08)" }} />
+                <Bar dataKey="total" fill="#7c6af7" radius={[6, 6, 0, 0]} maxBarSize={44} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
           <div className="glass rounded-xl p-4">
             <div className="text-sm font-semibold mb-3">Por tipo</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={byTipo}><XAxis dataKey="name" tick={{ fill: "#888", fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={70} /><YAxis tick={{ fill: "#888", fontSize: 10 }} /><Tooltip contentStyle={{ background: "#111118", border: "1px solid #333" }} /><Bar dataKey="total" fill="#F47B20" radius={[6, 6, 0, 0]} /></BarChart>
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={byTipo} layout="vertical" margin={{ top: 6, right: 24, left: 8, bottom: 6 }}>
+                <XAxis type="number" tick={{ fill: "#aaa", fontSize: 11 }} allowDecimals={false} />
+                <YAxis dataKey="name" type="category" width={180} tick={{ fill: "#ddd", fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: "#111118", border: "1px solid #333", borderRadius: 8 }} cursor={{ fill: "rgba(244,123,32,0.08)" }} />
+                <Bar dataKey="total" fill="#F47B20" radius={[0, 6, 6, 0]} maxBarSize={22} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
           <div className="glass rounded-xl p-4 col-span-2">
             <div className="text-sm font-semibold mb-3">Evolução mensal</div>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={evolucao}><XAxis dataKey="name" tick={{ fill: "#888", fontSize: 11 }} /><YAxis tick={{ fill: "#888", fontSize: 11 }} /><Tooltip contentStyle={{ background: "#111118", border: "1px solid #333" }} /><Line type="monotone" dataKey="total" stroke="#7c6af7" strokeWidth={2.5} dot={{ fill: "#7c6af7", r: 4 }} /></LineChart>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={evolucao} margin={{ top: 10, right: 20, left: 0, bottom: 6 }}>
+                <XAxis dataKey="name" tick={{ fill: "#aaa", fontSize: 12 }} />
+                <YAxis tick={{ fill: "#aaa", fontSize: 12 }} allowDecimals={false} width={30} />
+                <Tooltip contentStyle={{ background: "#111118", border: "1px solid #333", borderRadius: 8 }} />
+                <Line type="monotone" dataKey="total" stroke="#7c6af7" strokeWidth={2.5} dot={{ fill: "#7c6af7", r: 4 }} activeDot={{ r: 6 }} />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
