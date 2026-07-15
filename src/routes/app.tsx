@@ -27,6 +27,8 @@ function AppPage() {
   const [resumoOpen, setResumoOpen] = useState(false);
   const [resumoShown, setResumoShown] = useState(false);
   const state = useDemandas();
+  const { isAdmin } = useIsAdmin();
+  const slaAlertShown = useRef(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -51,6 +53,27 @@ function AppPage() {
     return () => clearInterval(int);
   }, [resumoShown]);
 
+  // Alerta SLA ao carregar
+  useEffect(() => {
+    if (state.loading || slaAlertShown.current || state.demandas.length === 0) return;
+    slaAlertShown.current = true;
+    let estouradas = 0, proximas = 0;
+    for (const d of state.demandas) {
+      if (d.status === "Resolvido") continue;
+      const s = slaFor(d);
+      if (s.variant === "red") estouradas++;
+      else if (s.variant === "yellow") proximas++;
+    }
+    if (estouradas > 0) {
+      toast.error(`${estouradas} demanda(s) com SLA estourado`, {
+        description: proximas > 0 ? `${proximas} próxima(s) do limite` : "Verifique a aba Demandas",
+        duration: 8000,
+      });
+    } else if (proximas > 0) {
+      toast.warning(`${proximas} demanda(s) próxima(s) do SLA`, { duration: 5000 });
+    }
+  }, [state.loading, state.demandas]);
+
   async function signOut() {
     await supabase.auth.signOut();
     toast.success("Sessão encerrada");
@@ -62,6 +85,7 @@ function AppPage() {
     { id: "demandas", label: "Demandas", icon: ListTodo },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "kanban", label: "Kanban", icon: KanbanSquare },
+    ...(isAdmin ? [{ id: "auditoria" as Tab, label: "Auditoria", icon: ShieldCheck }] : []),
   ];
 
   return (
