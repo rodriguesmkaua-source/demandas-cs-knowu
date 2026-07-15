@@ -249,3 +249,12 @@ function EditModal({ d, onClose, onSave }: { d: Demanda; onClose: () => void; on
     </div>
   );
 }
+
+function HL({ text, q }: { text: string; q: string }) {
+  const parts = highlightParts(text, q);
+  return (
+    <>
+      {parts.map((p, i) => p.match ? <mark key={i} className="hl">{p.text}</mark> : <span key={i}>{p.text}</span>)}
+    </>
+  );
+}
