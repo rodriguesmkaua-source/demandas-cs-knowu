@@ -40,6 +40,7 @@ export function KanbanTab({ state }: { state: State }) {
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {items.map((d) => {
                 const sla = slaFor(d);
+                const isBreached = sla.variant === "red" && d.status !== "Resolvido";
                 const slaCls =
                   sla.variant === "green" ? "bg-emerald-500/20 text-emerald-300"
                   : sla.variant === "yellow" ? "bg-yellow-500/20 text-yellow-300"
@@ -51,7 +52,11 @@ export function KanbanTab({ state }: { state: State }) {
                     draggable
                     onDragStart={() => setDragging(d.id)}
                     onDragEnd={() => setDragging(null)}
-                    className="rounded-lg p-3 bg-surface-2/70 border border-border cursor-grab hover:border-primary/50 hover:shadow-[0_4px_16px_oklch(0_0_0/0.4)] transition active:cursor-grabbing animate-fade-in"
+                    className={`rounded-lg p-3 bg-surface-2/70 border cursor-grab hover:shadow-[0_4px_16px_oklch(0_0_0/0.4)] transition active:cursor-grabbing animate-fade-in ${
+                      isBreached
+                        ? "border-red-500/70 ring-1 ring-red-500/40 shadow-[0_0_16px_oklch(0.62_0.24_25/0.3)] animate-pulse-danger"
+                        : "border-border hover:border-primary/50"
+                    }`}
                   >
                     <div className="text-[10px] font-mono uppercase tracking-widest text-accent truncate">{d.tipo}</div>
                     <div className="text-[10px] font-mono text-primary/70 truncate mt-0.5">{d.operadora}</div>

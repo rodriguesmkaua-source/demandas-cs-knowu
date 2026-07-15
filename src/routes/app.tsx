@@ -1,13 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDemandas } from "@/hooks/use-demandas";
+import { useIsAdmin } from "@/hooks/use-admin";
 import { Sidebar } from "@/components/demandas/Sidebar";
 import { DemandasTab } from "@/components/demandas/DemandasTab";
 import { DashboardTab } from "@/components/demandas/DashboardTab";
 import { KanbanTab } from "@/components/demandas/KanbanTab";
+import { AuditoriaTab } from "@/components/demandas/AuditoriaTab";
 import { ResumoDia } from "@/components/demandas/ResumoDia";
-import { LayoutDashboard, ListTodo, KanbanSquare, LogOut, Zap } from "lucide-react";
+import { slaFor } from "@/lib/demandas";
+import { LayoutDashboard, ListTodo, KanbanSquare, LogOut, Zap, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app")({
@@ -15,7 +18,7 @@ export const Route = createFileRoute("/app")({
   component: AppPage,
 });
 
-type Tab = "demandas" | "dashboard" | "kanban";
+type Tab = "demandas" | "dashboard" | "kanban" | "auditoria";
 
 function AppPage() {
   const navigate = useNavigate();
@@ -24,6 +27,8 @@ function AppPage() {
   const [resumoOpen, setResumoOpen] = useState(false);
   const [resumoShown, setResumoShown] = useState(false);
   const state = useDemandas();
+  const { isAdmin } = useIsAdmin();
+  const slaAlertShown = useRef(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -48,6 +53,27 @@ function AppPage() {
     return () => clearInterval(int);
   }, [resumoShown]);
 
+  // Alerta SLA ao carregar
+  useEffect(() => {
+    if (state.loading || slaAlertShown.current || state.demandas.length === 0) return;
+    slaAlertShown.current = true;
+    let estouradas = 0, proximas = 0;
+    for (const d of state.demandas) {
+      if (d.status === "Resolvido") continue;
+      const s = slaFor(d);
+      if (s.variant === "red") estouradas++;
+      else if (s.variant === "yellow") proximas++;
+    }
+    if (estouradas > 0) {
+      toast.error(`${estouradas} demanda(s) com SLA estourado`, {
+        description: proximas > 0 ? `${proximas} próxima(s) do limite` : "Verifique a aba Demandas",
+        duration: 8000,
+      });
+    } else if (proximas > 0) {
+      toast.warning(`${proximas} demanda(s) próxima(s) do SLA`, { duration: 5000 });
+    }
+  }, [state.loading, state.demandas]);
+
   async function signOut() {
     await supabase.auth.signOut();
     toast.success("Sessão encerrada");
@@ -59,6 +85,7 @@ function AppPage() {
     { id: "demandas", label: "Demandas", icon: ListTodo },
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "kanban", label: "Kanban", icon: KanbanSquare },
+    ...(isAdmin ? [{ id: "auditoria" as Tab, label: "Auditoria", icon: ShieldCheck }] : []),
   ];
 
   return (
@@ -108,6 +135,7 @@ function AppPage() {
           {tab === "demandas" && <DemandasTab state={state} />}
           {tab === "dashboard" && <DashboardTab state={state} />}
           {tab === "kanban" && <KanbanTab state={state} />}
+          {tab === "auditoria" && isAdmin && <AuditoriaTab />}
         </div>
       </main>
 
