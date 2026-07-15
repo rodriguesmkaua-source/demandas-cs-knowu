@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { useDemandas } from "@/hooks/use-demandas";
 import type { Demanda, Status } from "@/lib/demandas";
-import { STATUS_LIST, STATUS_COLORS, slaFor, nextStatus, highlight, MESES, OPERADORAS, TIPOS, TIPOS_COM_MEDICA, MEDICAS } from "@/lib/demandas";
+import { STATUS_LIST, STATUS_COLORS, slaFor, nextStatus, highlightParts, MESES, OPERADORAS, TIPOS, TIPOS_COM_MEDICA, MEDICAS } from "@/lib/demandas";
 import { Search, Pencil, Trash2, X } from "lucide-react";
 
 type State = ReturnType<typeof useDemandas>;
@@ -189,14 +189,14 @@ function Card({ d, q, selected, onSelect, onCycleStatus, onEdit }: {
           <span className="text-xs text-muted-foreground">·</span>
           <span className="text-[10px] font-mono uppercase tracking-widest text-primary/80">{d.operadora}</span>
         </div>
-        <div className="mt-1 text-base font-semibold" dangerouslySetInnerHTML={{ __html: highlight(d.beneficiario, q) }} />
+        <div className="mt-1 text-base font-semibold"><HL text={d.beneficiario} q={q} /></div>
         {(d.medica_responsavel || d.data_eq) && (
           <div className="mt-1 text-xs text-muted-foreground">
             {d.medica_responsavel && <span>{d.medica_responsavel}</span>}
             {d.data_eq && <span className="ml-2 font-mono">EQ: {d.data_eq}</span>}
           </div>
         )}
-        {d.observacao && <div className="mt-2 text-sm text-muted-foreground/90" dangerouslySetInnerHTML={{ __html: highlight(d.observacao, q) }} />}
+        {d.observacao && <div className="mt-2 text-sm text-muted-foreground/90"><HL text={d.observacao} q={q} /></div>}
       </div>
       <div className="flex flex-col gap-2 shrink-0 items-end">
         <button onClick={onCycleStatus}
@@ -247,5 +247,14 @@ function EditModal({ d, onClose, onSave }: { d: Demanda; onClose: () => void; on
         </div>
       </div>
     </div>
+  );
+}
+
+function HL({ text, q }: { text: string; q: string }) {
+  const parts = highlightParts(text, q);
+  return (
+    <>
+      {parts.map((p, i) => p.match ? <mark key={i} className="hl">{p.text}</mark> : <span key={i}>{p.text}</span>)}
+    </>
   );
 }

@@ -120,10 +120,22 @@ export function slaFor(d: Demanda): SLA {
   return { label: `${Math.round(days)}d`, variant: "red", hours };
 }
 
-export function highlight(text: string, query: string) {
-  if (!query.trim()) return text;
-  const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return text.replace(new RegExp(`(${q})`, "gi"), '<mark class="hl">$1</mark>');
+export function highlightParts(text: string, query: string): Array<{ text: string; match: boolean }> {
+  const q = query.trim();
+  if (!q) return [{ text, match: false }];
+  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(esc, "gi");
+  const parts: Array<{ text: string; match: boolean }> = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ text: text.slice(last, m.index), match: false });
+    parts.push({ text: m[0], match: true });
+    last = m.index + m[0].length;
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last), match: false });
+  return parts;
 }
 
 export const MESES = [
