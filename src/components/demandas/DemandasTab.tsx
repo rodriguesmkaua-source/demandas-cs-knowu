@@ -196,7 +196,7 @@ function Card({ d, q, selected, onSelect, onCycleStatus, onEdit }: {
             {d.data_eq && <span className="ml-2 font-mono">EQ: {d.data_eq}</span>}
           </div>
         )}
-        {d.observacao && <div className="mt-2 text-sm text-muted-foreground/90" dangerouslySetInnerHTML={{ __html: highlight(d.observacao, q) }} />}
+        {d.observacao && <div className="mt-2 text-sm text-muted-foreground/90"><HL text={d.observacao} q={q} /></div>}
       </div>
       <div className="flex flex-col gap-2 shrink-0 items-end">
         <button onClick={onCycleStatus}
