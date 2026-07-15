@@ -165,11 +165,13 @@ function Card({ d, q, selected, onSelect, onCycleStatus, onEdit }: {
     yellow: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40",
     red: "bg-red-500/25 text-red-300 border-red-500/50 animate-pulse-danger",
     gray: "bg-muted text-muted-foreground border-border",
-  };
+  const isBreached = sla.variant === "red" && d.status !== "Resolvido";
 
   return (
     <div
-      className={`glass rounded-xl p-4 card-hover animate-fade-in border-l-4 flex items-start gap-3`}
+      className={`glass rounded-xl p-4 card-hover animate-fade-in border-l-4 flex items-start gap-3 ${
+        isBreached ? "ring-1 ring-red-500/50 shadow-[0_0_20px_oklch(0.62_0.24_25/0.25)]" : ""
+      }`}
       style={{ borderLeftColor: c.hex }}
     >
       <input type="checkbox" checked={selected} onChange={onSelect} className="mt-1.5 accent-primary" />
