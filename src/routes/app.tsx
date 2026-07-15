@@ -1,13 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDemandas } from "@/hooks/use-demandas";
+import { useIsAdmin } from "@/hooks/use-admin";
 import { Sidebar } from "@/components/demandas/Sidebar";
 import { DemandasTab } from "@/components/demandas/DemandasTab";
 import { DashboardTab } from "@/components/demandas/DashboardTab";
 import { KanbanTab } from "@/components/demandas/KanbanTab";
+import { AuditoriaTab } from "@/components/demandas/AuditoriaTab";
 import { ResumoDia } from "@/components/demandas/ResumoDia";
-import { LayoutDashboard, ListTodo, KanbanSquare, LogOut, Zap } from "lucide-react";
+import { slaFor } from "@/lib/demandas";
+import { LayoutDashboard, ListTodo, KanbanSquare, LogOut, Zap, ShieldCheck, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app")({
@@ -15,7 +18,7 @@ export const Route = createFileRoute("/app")({
   component: AppPage,
 });
 
-type Tab = "demandas" | "dashboard" | "kanban";
+type Tab = "demandas" | "dashboard" | "kanban" | "auditoria";
 
 function AppPage() {
   const navigate = useNavigate();
