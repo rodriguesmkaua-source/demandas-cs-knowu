@@ -6,215 +6,296 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 
-const DONUT_COLORS = ["#5a9e5e", "#F15A24", "#2d6e2d", "#9eb0a8", "#c87830", "#6b8a70", "#3d7a6e", "#a07030"];
+/* ── Paleta fixa por categoria (idem fechamento-shared.js) ─────────────── */
+const CATEGORY_COLORS: Record<string, string> = {
+  "Agendamento EQ": "#03914C",
+  "Reenvio de assinatura médica": "#F15A24",
+  "Aguardando assinatura do médico": "#1F5C18",
+  "N° Incorreto": "#A6A6A6",
+  "Reagendamento EQ": "#D9530A",
+  "Modificar Cadastro": "#8A9586",
+  "Link de assinatura": "#3B6FA0",
+  "Cadastro não localizado": "#B23A48",
+  "Outro": "#8C8C8C",
+};
+
+function colorFor(tipo: string): string {
+  if (CATEGORY_COLORS[tipo]) return CATEGORY_COLORS[tipo];
+  let h = 0;
+  for (const ch of String(tipo)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `hsl(${h % 360} 52% 40%)`;
+}
 
 const C = {
-  bg: "#F5F4F1",
   orange: "#F15A24",
   green: "#00843D",
   navy: "#0B1F4A",
   blue: "#3B5AA0",
-  gray: "#55524C",
+  grayText: "#55524C",
   track: "#EDEAE3",
   card: "#FFFFFF",
-  boxBg: "#FAFAF8",
-  boxBorder: "#EFEDE7",
-  divider: "#E4E1D9",
-  mute: "#A9A49A",
+  page: "#F5F4F1",
+  cover: "#F1EEEB",
 };
 
-function planoAcao(tipo: string): string {
-  const t = tipo.toLowerCase();
-  if (t.includes("reenvio") && t.includes("assinatura")) return "Confirmar recebimento e reenviar documento para assinatura do médico";
-  if (t.includes("link") && t.includes("assinatura")) return "Verificar validade do link e reenviar para assinatura do profissional";
-  if (t.includes("modificar") || t.includes("cadastro")) return "Revisar e corrigir dados cadastrais do beneficiário junto à operadora";
-  if (t.includes("preenchimento")) return "Disponibilizar guia de preenchimento e reforçar suporte ao beneficiário";
-  if (t.includes("inclusão") || t.includes("beneficiário")) return "Acompanhar pendências de cadastro e alinhar fluxo com a operadora";
-  if (t.includes("plataforma") || t.includes("sistema")) return "Mapear fricções e agendar capacitação com a equipe interna";
-  if (t.includes("assinatura")) return "Otimizar fluxo de assinatura digital e resolver pendências com o médico";
-  if (t.includes("acesso") || t.includes("login")) return "Verificar autenticação e orientar usuários sobre o processo de login";
-  return "Monitorar evolução do volume e definir ação preventiva com a equipe";
-}
+const FONT = "'Segoe UI', system-ui, -apple-system, Arial, sans-serif";
 
+interface Tipo { tipo: string; count: number }
 interface SlideData {
-  operadora: string;
-  mesNome: string;
-  ano: string;
+  op: string;
+  opDisplay: string;
+  mes: string;
+  ano: string | number;
+  tipos: Tipo[];
   total: number;
-  emAberto: number;
-  tipos: Array<{ name: string; value: number; pct: number; color: string }>;
-  maior?: { name: string; value: number };
+  maior: Tipo;
+  assinatura: number;
+  maxCount: number;
 }
 
-function buildSlideData(demandas: Demanda[], operadora: string, mesNome: string, ano: string): SlideData {
-  const total = demandas.length;
-  const emAberto = demandas.filter((d) => d.status !== "Resolvido").length;
+function shortOpName(op: string): string {
+  return op.replace(/^UNIMED\s+/i, "");
+}
+
+function buildSlideData(demandas: Demanda[], operadora: string, mes: string, ano: string): SlideData {
   const map = new Map<string, number>();
   demandas.forEach((d) => map.set(d.tipo, (map.get(d.tipo) ?? 0) + 1));
   const tipos = Array.from(map.entries())
-    .map(([name, value]) => ({ name, value, pct: total ? (value / total) * 100 : 0 }))
-    .sort((a, b) => b.value - a.value)
-    .map((t, i) => ({ ...t, color: DONUT_COLORS[i % DONUT_COLORS.length] }));
-  return { operadora, mesNome, ano, total, emAberto, tipos, maior: tipos[0] };
+    .map(([tipo, count]) => ({ tipo, count }))
+    .sort((a, b) => b.count - a.count);
+  const total = tipos.reduce((a, t) => a + t.count, 0);
+  const maior = tipos[0] || { tipo: "—", count: 0 };
+  const countOf = (name: string) => (tipos.find((t) => t.tipo === name) || { count: 0 }).count;
+  const assinatura = countOf("Reenvio de assinatura médica") + countOf("Aguardando assinatura do médico");
+  const maxCount = tipos.length ? tipos[0].count : 0;
+  return { op: operadora, opDisplay: shortOpName(operadora), mes, ano, tipos, total, maior, assinatura, maxCount };
 }
 
-/** Donut SVG segments (1672x941 slide, ~386px donut) */
-function DonutSVG({ tipos, total }: { tipos: SlideData["tipos"]; total: number }) {
+/* ── Donut SVG (canvas 386×386, R=193, r=92) ───────────────────────────── */
+function DonutSVG({ data }: { data: SlideData }) {
   const size = 386;
   const cx = size / 2, cy = size / 2;
-  const rOuter = 180, rInner = 105;
-  let acc = 0;
-  const arcs = tipos.map((t) => {
-    const start = (acc / Math.max(total, 1)) * Math.PI * 2 - Math.PI / 2;
-    acc += t.value;
-    const end = (acc / Math.max(total, 1)) * Math.PI * 2 - Math.PI / 2;
-    const large = end - start > Math.PI ? 1 : 0;
-    const x1 = cx + rOuter * Math.cos(start), y1 = cy + rOuter * Math.sin(start);
-    const x2 = cx + rOuter * Math.cos(end), y2 = cy + rOuter * Math.sin(end);
-    const x3 = cx + rInner * Math.cos(end), y3 = cy + rInner * Math.sin(end);
-    const x4 = cx + rInner * Math.cos(start), y4 = cy + rInner * Math.sin(start);
-    const d = `M ${x1} ${y1} A ${rOuter} ${rOuter} 0 ${large} 1 ${x2} ${y2} L ${x3} ${y3} A ${rInner} ${rInner} 0 ${large} 0 ${x4} ${y4} Z`;
-    const mid = (start + end) / 2;
-    const labelR = (rOuter + rInner) / 2;
-    const lx = cx + labelR * Math.cos(mid), ly = cy + labelR * Math.sin(mid);
-    return { d, color: t.color, pct: t.pct, lx, ly };
+  const R = 193, r = 92;
+  const { tipos, total } = data;
+
+  if (!total) {
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={R} fill="#EDEAE3" />
+        <circle cx={cx} cy={cy} r={r} fill="#FFFFFF" />
+        <text x={cx} y={cy + 4} textAnchor="middle" fontSize={54} fontWeight={800} fill={C.navy} fontFamily={FONT}>0</text>
+        <text x={cx} y={cy + 32} textAnchor="middle" fontSize={20} fill="#8F8B82" fontFamily={FONT}>demandas</text>
+      </svg>
+    );
+  }
+
+  let angle = -Math.PI / 2;
+  const segs = tipos.filter((t) => t.count).map((t) => {
+    const frac = t.count / total;
+    const sweep = frac * Math.PI * 2;
+    const start = angle;
+    const end = angle + sweep;
+    angle = end;
+
+    // Pie slice from center (mesmo do canvas: moveTo(cx,cy) + arc)
+    const x1 = cx + R * Math.cos(start), y1 = cy + R * Math.sin(start);
+    const x2 = cx + R * Math.cos(end), y2 = cy + R * Math.sin(end);
+    const large = sweep > Math.PI ? 1 : 0;
+    const d = `M ${cx} ${cy} L ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} Z`;
+
+    const pct = Math.round(frac * 100);
+    const mid = start + sweep / 2;
+    const lr = (R + r) / 2;
+    const lx = cx + Math.cos(mid) * lr;
+    const ly = cy + Math.sin(mid) * lr;
+    return { d, color: colorFor(t.tipo), pct, lx, ly };
   });
+
+  const totalStr = String(total);
+  const totalFontSize = totalStr.length >= 3 ? 46 : 54;
+
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {arcs.map((a, i) => (
-        <g key={i}>
-          <path d={a.d} fill={a.color} stroke="#fff" strokeWidth={2.5} />
-          {a.pct >= 7 && (
-            <text x={a.lx} y={a.ly} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={18} fontWeight={700}>
-              {a.pct.toFixed(0)}%
-            </text>
-          )}
-        </g>
+      {segs.map((s, i) => (
+        <path key={i} d={s.d} fill={s.color} stroke="#FFFFFF" strokeWidth={3} />
       ))}
-      <text x={cx} y={cy - 8} textAnchor="middle" fontSize={56} fontWeight={800} fill={C.navy}>{total}</text>
-      <text x={cx} y={cy + 28} textAnchor="middle" fontSize={16} fill={C.gray} letterSpacing={2}>tickets</text>
+      {/* Miolo branco por cima */}
+      <circle cx={cx} cy={cy} r={r} fill="#FFFFFF" />
+      {segs.map((s, i) =>
+        s.pct >= 6 ? (
+          <text key={`t${i}`} x={s.lx} y={s.ly} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={23} fontWeight={700} fontFamily={FONT} style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,.25)", strokeWidth: 0.5 }}>
+            {s.pct}%
+          </text>
+        ) : null
+      )}
+      <text x={cx} y={cy + 4} textAnchor="middle" fontSize={totalFontSize} fontWeight={800} fill={C.navy} fontFamily={FONT}>{totalStr}</text>
+      <text x={cx} y={cy + 32} textAnchor="middle" fontSize={20} fill="#8F8B82" fontFamily={FONT}>demandas</text>
     </svg>
   );
 }
 
+/* ── Logo fallback (mesmo do CSS: pill translúcido com sigla) ──────────── */
+function LogoFallback({ label }: { label: string }) {
+  return (
+    <div style={{
+      height: 66, padding: "0 22px", borderRadius: 10,
+      background: "rgba(255,255,255,0.16)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      color: "#fff", fontSize: 20, fontWeight: 800, letterSpacing: 0.3, whiteSpace: "nowrap",
+    }}>
+      {label}
+    </div>
+  );
+}
+
+/* ── Slide operadora — 1672×941, mesma estrutura do renderer ───────────── */
 function SlideCard({ data }: { data: SlideData }) {
-  const { operadora, mesNome, ano, total, emAberto, tipos, maior } = data;
-  const maxV = tipos[0]?.value || 1;
+  const { opDisplay, mes, ano, tipos, total, maior, assinatura, maxCount } = data;
+
+  // fitTitle: reduz de 50px até caber em (1672 - 420 - 56 - 62) = 1134
+  let titleSize = 50;
+  const titleText = `Fechamento ${opDisplay} ${mes}`;
+  // rough width: assume ~0.55 * fontSize per char (bold sans)
+  const maxW = 1134;
+  while (titleText.length * titleSize * 0.55 > maxW && titleSize > 22) titleSize -= 2;
+
   return (
-    <div style={{ width: 1672, height: 941, background: C.bg, fontFamily: "DM Sans, Inter, sans-serif", color: C.navy, position: "relative" }}>
+    <div style={{
+      width: 1672, height: 941, background: C.page, fontFamily: FONT,
+      display: "flex", flexDirection: "column", position: "relative", overflow: "hidden",
+      borderRadius: 6,
+    }}>
       {/* Header */}
-      <div style={{ height: 130, background: C.orange, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 60px" }}>
-        <div>
-          <div style={{ fontSize: 13, fontFamily: "DM Mono, monospace", letterSpacing: 3, color: "rgba(255,255,255,0.85)", textTransform: "uppercase" }}>KnowU · Customer Success</div>
-          <div style={{ fontSize: 44, fontWeight: 800, color: "#fff", marginTop: 6, letterSpacing: -1 }}>Fechamento {mesNome} {ano}</div>
+      <div style={{
+        height: 130, flexShrink: 0, background: C.orange,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 56px 0 62px",
+      }}>
+        <div style={{
+          fontSize: titleSize, fontWeight: 800, color: "#fff",
+          letterSpacing: -0.5, lineHeight: 1, whiteSpace: "nowrap",
+          maxWidth: 1050, overflow: "hidden",
+        }}>
+          {titleText}
         </div>
-        <div style={{ padding: "14px 26px", background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.4)", borderRadius: 12, color: "#fff", fontSize: 20, fontWeight: 700, maxWidth: 520, textAlign: "right" }}>
-          {operadora}
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", height: "100%", maxWidth: 420 }}>
+          <LogoFallback label={opDisplay} />
         </div>
       </div>
 
-      {/* Card body */}
-      <div style={{ position: "absolute", top: 160, left: 30, right: 30, bottom: 30, background: C.card, borderRadius: 16, padding: 32, boxShadow: "0 2px 20px rgba(0,0,0,0.06)" }}>
-        <div style={{ fontSize: 27, fontWeight: 700, color: C.navy }}>Relatório mensal de demandas</div>
-        <div style={{ fontSize: 17, color: C.blue, marginTop: 4 }}>{operadora} · {mesNome} {ano}</div>
+      {/* Card */}
+      <div style={{
+        background: C.card, borderRadius: 16,
+        boxShadow: "0 2px 18px rgba(20,20,30,.06)",
+        margin: "30px 52px 44px 52px",
+        padding: "34px 44px 40px 44px",
+        flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+        overflow: "hidden", position: "relative",
+      }}>
+        <div style={{ fontSize: 27, fontWeight: 800, color: C.navy, lineHeight: 1.15 }}>Relatório mensal de demandas</div>
+        <div style={{ fontSize: 17, fontWeight: 600, color: C.blue, marginTop: 4 }}>{mes} de {ano}</div>
 
-        {/* KPI row */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginTop: 20 }}>
-          <div style={{ background: C.boxBg, border: `1px solid ${C.boxBorder}`, borderRadius: 10, padding: "18px 22px" }}>
-            <div style={{ fontSize: 11, fontFamily: "DM Mono, monospace", letterSpacing: 2, color: C.gray, textTransform: "uppercase" }}>Total</div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 6 }}>
-              <div style={{ fontSize: 52, fontWeight: 800, color: C.orange, lineHeight: 1 }}>{total}</div>
-              <div style={{ fontSize: 14, color: C.gray }}>demandas registradas</div>
-            </div>
-          </div>
-          <div style={{ background: C.boxBg, border: `1px solid ${C.boxBorder}`, borderRadius: 10, padding: "18px 22px" }}>
-            <div style={{ fontSize: 11, fontFamily: "DM Mono, monospace", letterSpacing: 2, color: C.gray, textTransform: "uppercase" }}>Maior demanda</div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 6 }}>
-              <div style={{ fontSize: 52, fontWeight: 800, color: C.green, lineHeight: 1 }}>{maior?.value ?? 0}</div>
-              <div style={{ fontSize: 13, color: C.gray, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 280 }}>{maior?.name ?? "—"}</div>
-            </div>
-          </div>
-          <div style={{ background: C.boxBg, border: `1px solid ${C.boxBorder}`, borderRadius: 10, padding: "18px 22px" }}>
-            <div style={{ fontSize: 11, fontFamily: "DM Mono, monospace", letterSpacing: 2, color: C.gray, textTransform: "uppercase" }}>Em aberto</div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 6 }}>
-              <div style={{ fontSize: 52, fontWeight: 800, color: "#c53030", lineHeight: 1 }}>{emAberto}</div>
-              <div style={{ fontSize: 14, color: C.gray }}>não resolvidas</div>
-            </div>
-          </div>
+        {/* KPIs */}
+        <div style={{ display: "flex", gap: 40, margin: "26px 0 34px" }}>
+          <KPI label="Total" num={total} color={C.orange} desc="demandas registradas" />
+          <KPI label="Maior demanda" num={maior.count} color={C.green} desc={maior.tipo} />
+          <KPI label="Assinatura médica" num={assinatura} color={C.orange} desc="Reenvio + aguardando assinatura" />
         </div>
 
-        {/* Two columns */}
-        <div style={{ display: "grid", gridTemplateColumns: "566px 1fr", gap: 30, marginTop: 24 }}>
-          {/* Donut */}
-          <div>
-            <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, marginBottom: 12 }}>Distribuição por tipo</div>
-            <div style={{ display: "flex", justifyContent: "center", padding: "10px 0" }}>
-              <DonutSVG tipos={tipos} total={total} />
+        {/* Body */}
+        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+          <div style={{ width: 566, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div style={{ fontSize: 21, fontWeight: 800, color: C.navy, marginBottom: 22, flexShrink: 0 }}>Distribuição por tipo de demanda</div>
+            <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
+              <DonutSVG data={data} />
             </div>
           </div>
 
-          {/* Table */}
-          <div>
-            <div style={{ fontSize: 21, fontWeight: 700, color: C.navy, marginBottom: 12 }}>Detalhamento</div>
-            <div style={{ display: "grid", gridTemplateColumns: "336px 1fr 70px 64px", gap: 12, fontSize: 11, fontFamily: "DM Mono, monospace", color: C.gray, textTransform: "uppercase", letterSpacing: 1.5, paddingBottom: 8 }}>
-              <div>Tipo de Demanda</div><div>Volume</div><div style={{ textAlign: "right" }}>Qtd</div><div style={{ textAlign: "right" }}>%</div>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div style={{ fontSize: 21, fontWeight: 800, color: C.navy, marginBottom: 22, flexShrink: 0 }}>Volume por tipo de demanda</div>
+            <div style={{
+              display: "grid", gridTemplateColumns: "336px 1fr 70px 64px",
+              paddingBottom: 10, borderBottom: "1.5px solid #E4E1D9", marginBottom: 4, flexShrink: 0,
+            }}>
+              <span style={thStyle}>Demanda</span>
+              <span style={thStyle}>Volume</span>
+              <span style={{ ...thStyle, textAlign: "right" }}>Qtd</span>
+              <span style={{ ...thStyle, textAlign: "right" }}>%</span>
             </div>
-            <div style={{ height: 1.5, background: C.divider, marginBottom: 10 }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {tipos.map((t) => (
-                <div key={t.name} style={{ display: "grid", gridTemplateColumns: "336px 1fr 70px 64px", gap: 12, alignItems: "center" }}>
-                  <div style={{ fontSize: 15, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{t.name}</div>
-                  <div style={{ height: 13, borderRadius: 7, background: C.track, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${(t.value / maxV) * 100}%`, background: t.color, borderRadius: 7 }} />
-                  </div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: C.navy, textAlign: "right", fontFamily: "DM Mono, monospace" }}>{t.value}</div>
-                  <div style={{ fontSize: 14, color: C.mute, textAlign: "right", fontFamily: "DM Mono, monospace" }}>{t.pct.toFixed(1)}%</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Plano de ação compacto */}
-            {tipos.length > 0 && (
-              <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.divider}` }}>
-                <div style={{ fontSize: 13, fontFamily: "DM Mono, monospace", color: C.gray, textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>Plano de ação</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {tipos.slice(0, 3).map((t) => (
-                    <div key={t.name} style={{ borderLeft: `4px solid ${t.color}`, paddingLeft: 10, fontSize: 12, color: C.gray, lineHeight: 1.4 }}>
-                      <span style={{ color: C.navy, fontWeight: 600 }}>{t.name}:</span> {planoAcao(t.name)}
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-evenly", flex: 1, minHeight: 0 }}>
+              {tipos.map((t) => {
+                const pct = total ? Math.round((t.count / total) * 100) : 0;
+                const barPct = maxCount ? Math.round((t.count / maxCount) * 100) : 0;
+                const color = colorFor(t.tipo);
+                return (
+                  <div key={t.tipo} style={{ display: "grid", gridTemplateColumns: "336px 1fr 70px 64px", alignItems: "center" }}>
+                    <span style={{ fontSize: 16, color: "#2b2b2b", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 12 }} title={t.tipo}>{t.tipo}</span>
+                    <div style={{ height: 13, maxWidth: 374, borderRadius: 7, background: C.track, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${barPct}%`, borderRadius: 7, background: color }} />
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <span style={{ fontSize: 20, fontWeight: 800, color: C.navy, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{t.count}</span>
+                    <span style={{ fontSize: 14, color: "#A9A49A", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
+
+        {!total && (
+          <div style={{ position: "absolute", left: 44, right: 44, top: "50%", transform: "translateY(-30px)", textAlign: "center", pointerEvents: "none" }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🗂️</div>
+            <div style={{ fontSize: 19, fontWeight: 700, color: "#B7B2A8" }}>Sem demandas registradas neste período</div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function CoverSlide({ mesNome, ano, totalOps, totalDem }: { mesNome: string; ano: string; totalOps: number; totalDem: number }) {
+const thStyle: React.CSSProperties = {
+  fontSize: 13, fontWeight: 800, color: "#A9A49A",
+  textTransform: "uppercase", letterSpacing: "0.04em",
+};
+
+function KPI({ label, num, color, desc }: { label: string; num: number; color: string; desc: string }) {
   return (
-    <div style={{ width: 1672, height: 941, background: C.orange, fontFamily: "DM Sans, sans-serif", color: "#fff", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", position: "relative" }}>
-      <div style={{ fontSize: 15, fontFamily: "DM Mono, monospace", letterSpacing: 4, opacity: 0.9, textTransform: "uppercase" }}>KnowU · Customer Success</div>
-      <div style={{ fontSize: 120, fontWeight: 900, letterSpacing: -3, marginTop: 24, lineHeight: 1 }}>Fechamento</div>
-      <div style={{ fontSize: 80, fontWeight: 700, marginTop: 8, letterSpacing: -1 }}>{mesNome} {ano}</div>
-      <div style={{ fontSize: 22, marginTop: 40, opacity: 0.95 }}>Relatório consolidado — todas as operadoras</div>
-      <div style={{ display: "flex", gap: 60, marginTop: 60 }}>
-        <div>
-          <div style={{ fontSize: 72, fontWeight: 800, lineHeight: 1 }}>{totalOps}</div>
-          <div style={{ fontSize: 16, opacity: 0.9, marginTop: 4 }}>operadoras</div>
-        </div>
-        <div style={{ width: 1, background: "rgba(255,255,255,0.4)" }} />
-        <div>
-          <div style={{ fontSize: 72, fontWeight: 800, lineHeight: 1 }}>{totalDem}</div>
-          <div style={{ fontSize: 16, opacity: 0.9, marginTop: 4 }}>demandas registradas</div>
-        </div>
+    <div style={{
+      flex: 1, minWidth: 0,
+      background: "#FAFAF8", border: "1px solid #EFEDE7", borderRadius: 10,
+      padding: "16px 22px",
+    }}>
+      <div style={{ fontSize: 12.5, fontWeight: 800, color: C.blue, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 13, minWidth: 0 }}>
+        <span style={{ fontSize: 35, fontWeight: 800, lineHeight: 1, flexShrink: 0, fontVariantNumeric: "tabular-nums", color }}>{num}</span>
+        <span style={{ fontSize: 15, color: C.grayText, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{desc}</span>
       </div>
     </div>
   );
 }
 
+/* ── Capa consolidada (fechamento-completo.html) ───────────────────────── */
+function CoverSlide({ mes, ano }: { mes: string; ano: string }) {
+  return (
+    <div style={{
+      width: 1672, height: 941, position: "relative", overflow: "hidden",
+      borderRadius: 6, background: C.cover, fontFamily: FONT,
+    }}>
+      <div style={{ position: "absolute", left: 99, top: 258, fontWeight: 800, lineHeight: 1.16, letterSpacing: -1.5 }}>
+        <div style={{ fontSize: 104, color: C.navy }}>Fechamento</div>
+        <div style={{ fontSize: 104 }}>
+          <span style={{ color: C.navy }}>Consolidado</span>{" "}
+          <span style={{ color: C.orange }}>{mes}</span>
+        </div>
+      </div>
+      <div style={{ position: "absolute", left: 99, top: 552, fontSize: 27, fontWeight: 800, color: C.navy, letterSpacing: -0.3 }}>
+        {mes} de {ano}
+      </div>
+    </div>
+  );
+}
+
+/* ── Modal wrapper ─────────────────────────────────────────────────────── */
 export function FechamentoModal({
   demandas, operadora, mesKey, onClose,
 }: { demandas: Demanda[]; operadora: string | "TODAS"; mesKey: string; onClose: () => void }) {
@@ -247,7 +328,7 @@ export function FechamentoModal({
   }, [filtered, operadora, isConsolidado, mesNome, ano]);
 
   async function captureNode(node: HTMLElement) {
-    return html2canvas(node, { scale: 2, backgroundColor: C.bg, useCORS: true, width: 1672, height: 941, windowWidth: 1672 });
+    return html2canvas(node, { scale: 2, backgroundColor: C.page, useCORS: true, width: 1672, height: 941, windowWidth: 1672 });
   }
 
   async function exportPNG() {
@@ -277,33 +358,31 @@ export function FechamentoModal({
       const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [1672, 941], hotfixes: ["px_scaling"] });
 
       if (isConsolidado) {
-        // render off-screen container
         const wrap = document.createElement("div");
         wrap.style.cssText = "position:fixed;left:-99999px;top:0;";
         document.body.appendChild(wrap);
 
-        // Cover
         const { createRoot } = await import("react-dom/client");
         const React = await import("react");
 
-        async function renderAndCapture(el: React.ReactElement) {
+        async function renderAndCapture(el: React.ReactElement, bg: string) {
           const host = document.createElement("div");
           wrap.appendChild(host);
           const root = createRoot(host);
           root.render(el);
           await new Promise((r) => setTimeout(r, 250));
-          const canvas = await html2canvas(host.firstChild as HTMLElement, { scale: 2, backgroundColor: C.bg, useCORS: true, width: 1672, height: 941, windowWidth: 1672 });
+          const canvas = await html2canvas(host.firstChild as HTMLElement, { scale: 2, backgroundColor: bg, useCORS: true, width: 1672, height: 941, windowWidth: 1672 });
           root.unmount();
           host.remove();
           return canvas.toDataURL("image/jpeg", 0.92);
         }
 
-        const coverImg = await renderAndCapture(React.createElement(CoverSlide, { mesNome, ano, totalOps: operadorasList.length, totalDem: filtered.length }));
+        const coverImg = await renderAndCapture(React.createElement(CoverSlide, { mes: mesNome, ano }), C.cover);
         pdf.addImage(coverImg, "JPEG", 0, 0, 1672, 941);
 
         for (const { op, arr } of operadorasList) {
           const data = buildSlideData(arr, op, mesNome, ano);
-          const img = await renderAndCapture(React.createElement(SlideCard, { data }));
+          const img = await renderAndCapture(React.createElement(SlideCard, { data }), C.page);
           pdf.addPage([1672, 941], "landscape");
           pdf.addImage(img, "JPEG", 0, 0, 1672, 941);
         }
@@ -328,7 +407,9 @@ export function FechamentoModal({
         <div className="flex items-center justify-between mb-4 sticky top-0 z-10 glass rounded-xl px-4 py-3">
           <div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-accent">Relatório de Fechamento</div>
-            <div className="font-semibold">{isConsolidado ? `Consolidado · ${operadorasList.length} operadora(s)` : operadora} · {mesNome} {ano}</div>
+            <div className="font-semibold">
+              {isConsolidado ? `Consolidado · ${operadorasList.length} operadora(s)` : shortOpName(operadora)} · {mesNome} {ano}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {!isConsolidado && (
@@ -346,7 +427,7 @@ export function FechamentoModal({
         {isConsolidado ? (
           <div className="space-y-6">
             <div ref={slideRef}>
-              <CoverSlide mesNome={mesNome} ano={ano} totalOps={operadorasList.length} totalDem={filtered.length} />
+              <CoverSlide mes={mesNome} ano={ano} />
             </div>
             {operadorasList.map(({ op, arr }) => (
               <SlideCard key={op} data={buildSlideData(arr, op, mesNome, ano)} />
