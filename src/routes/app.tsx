@@ -10,7 +10,7 @@ import { KanbanTab } from "@/components/demandas/KanbanTab";
 import { AuditoriaTab } from "@/components/demandas/AuditoriaTab";
 import { ResumoDia } from "@/components/demandas/ResumoDia";
 import { slaFor } from "@/lib/demandas";
-import { LayoutDashboard, ListTodo, KanbanSquare, LogOut, Zap, ShieldCheck, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, ListTodo, KanbanSquare, LogOut, Zap, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app")({
