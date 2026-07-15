@@ -165,6 +165,7 @@ function Card({ d, q, selected, onSelect, onCycleStatus, onEdit }: {
     yellow: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40",
     red: "bg-red-500/25 text-red-300 border-red-500/50 animate-pulse-danger",
     gray: "bg-muted text-muted-foreground border-border",
+  };
   const isBreached = sla.variant === "red" && d.status !== "Resolvido";
 
   return (
