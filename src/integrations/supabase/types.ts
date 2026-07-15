@@ -14,7 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      demandas: {
+        Row: {
+          beneficiario: string
+          created_at: string
+          data: string
+          data_eq: string | null
+          hora: string
+          id: string
+          medica_responsavel: string | null
+          observacao: string | null
+          operadora: string
+          resolvido_em: string | null
+          solicitante: string
+          status: string
+          tipo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          beneficiario: string
+          created_at?: string
+          data: string
+          data_eq?: string | null
+          hora: string
+          id?: string
+          medica_responsavel?: string | null
+          observacao?: string | null
+          operadora: string
+          resolvido_em?: string | null
+          solicitante: string
+          status?: string
+          tipo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          beneficiario?: string
+          created_at?: string
+          data?: string
+          data_eq?: string | null
+          hora?: string
+          id?: string
+          medica_responsavel?: string | null
+          observacao?: string | null
+          operadora?: string
+          resolvido_em?: string | null
+          solicitante?: string
+          status?: string
+          tipo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
