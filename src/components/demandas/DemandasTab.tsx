@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { useDemandas } from "@/hooks/use-demandas";
 import type { Demanda, Status } from "@/lib/demandas";
-import { STATUS_LIST, STATUS_COLORS, slaFor, nextStatus, highlight, MESES, OPERADORAS, TIPOS, TIPOS_COM_MEDICA, MEDICAS } from "@/lib/demandas";
+import { STATUS_LIST, STATUS_COLORS, slaFor, nextStatus, highlightParts, MESES, OPERADORAS, TIPOS, TIPOS_COM_MEDICA, MEDICAS } from "@/lib/demandas";
 import { Search, Pencil, Trash2, X } from "lucide-react";
 
 type State = ReturnType<typeof useDemandas>;
