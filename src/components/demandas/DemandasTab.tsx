@@ -189,7 +189,7 @@ function Card({ d, q, selected, onSelect, onCycleStatus, onEdit }: {
           <span className="text-xs text-muted-foreground">·</span>
           <span className="text-[10px] font-mono uppercase tracking-widest text-primary/80">{d.operadora}</span>
         </div>
-        <div className="mt-1 text-base font-semibold"><Highlight text={d.beneficiario} q={q} /></div>
+        <div className="mt-1 text-base font-semibold"><HL text={d.beneficiario} q={q} /></div>
         {(d.medica_responsavel || d.data_eq) && (
           <div className="mt-1 text-xs text-muted-foreground">
             {d.medica_responsavel && <span>{d.medica_responsavel}</span>}
