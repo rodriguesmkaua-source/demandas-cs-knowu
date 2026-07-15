@@ -120,10 +120,11 @@ export function slaFor(d: Demanda): SLA {
   return { label: `${Math.round(days)}d`, variant: "red", hours };
 }
 
-export function highlight(text: string, query: string) {
-  if (!query.trim()) return text;
+export function highlightParts(text: string, query: string): Array<{ text: string; match: boolean }> {
+  if (!query.trim()) return [{ text, match: false }];
   const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return text.replace(new RegExp(`(${q})`, "gi"), '<mark class="hl">$1</mark>');
+  const re = new RegExp(`(${q})`, "gi");
+  return text.split(re).filter((s) => s !== "").map((s) => ({ text: s, match: re.test(s) && (re.lastIndex = 0, true) }));
 }
 
 export const MESES = [
